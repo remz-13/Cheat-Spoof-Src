@@ -1,0 +1,587 @@
+using Guna.UI2.WinForms;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Management;
+using System.Net;
+using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace Spoofer_Source
+{
+    public partial class Form1 : Form
+    {
+        
+        [DllImport("gdi32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
+
+        [DllImport("user32.dll")]
+        private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
+
+        private int _borderRadius = 20;
+        private bool _dragging = false;
+        private Point _startPoint = new Point(0, 0);
+
+        public Form1()
+        {
+            InitializeComponent();
+            this.FormBorderStyle = FormBorderStyle.None; 
+            this.BackColor = Color.White; 
+
+            
+            this.MouseDown += new MouseEventHandler(Form1_MouseDown);
+            this.MouseMove += new MouseEventHandler(Form1_MouseMove);
+            this.MouseUp += new MouseEventHandler(Form1_MouseUp);
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            
+            UpdateRegion();
+
+            
+            LoadLastOpenedDate();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            
+            UpdateRegion();
+        }
+
+        private void UpdateRegion()
+        {
+            var region = CreateRoundRectRgn(0, 0, this.Width, this.Height, _borderRadius, _borderRadius);
+            SetWindowRgn(this.Handle, region, true);
+        }
+
+        private void LoadLastOpenedDate()
+        {
+            
+            DateTime lastOpenedDate = Properties.Settings.Default.LastOpenedDate;
+
+            
+            if (lastOpenedDate == default(DateTime))
+            {
+                guna2HtmlLabel6.Text = "";
+            }
+            else
+            {
+                guna2HtmlLabel6.Text = $"Last Opened: {lastOpenedDate.ToString("MMMM dd, yyyy")}";
+            }
+        }
+
+        private void SaveLastOpenedDate()
+        {
+           
+            Properties.Settings.Default.LastOpenedDate = DateTime.Now;
+            Properties.Settings.Default.Save();
+        }
+
+        private void guna2HtmlLabel1_Click(object sender, EventArgs e)
+        {
+            
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            
+        }
+
+        private void guna2Button1_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void guna2Button2_Click(object sender, EventArgs e)
+        {
+           
+            var result = MessageBox.Show(
+                "Would you like to find your motherboard?",
+                "Find Motherboard",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question
+            );
+
+            
+            if (result == DialogResult.Yes)
+            {
+                
+                MotherboardOptionsForm optionsForm = new MotherboardOptionsForm();
+                optionsForm.OnItemSelected += UpdateLabelText;
+                optionsForm.ShowDialog();
+            }
+            else
+            {
+                
+                MessageBox.Show("You chose not to find your motherboard.");
+            }
+        }
+
+        
+        private void UpdateLabelText(string selectedItem)
+        {
+            if (guna2HtmlLabel10.InvokeRequired)
+            {
+                guna2HtmlLabel10.Invoke(new Action(() => guna2HtmlLabel10.Text = selectedItem));
+            }
+            else
+            {
+                guna2HtmlLabel10.Text = selectedItem;
+            }
+        }
+
+        private void Form1_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            
+            SaveLastOpenedDate();
+        }
+
+        private void guna2HtmlLabel7_Click(object sender, EventArgs e)
+        {
+            
+        }
+
+        
+        private void Form1_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                _dragging = true;
+                _startPoint = e.Location;
+            }
+        }
+
+        
+        private void Form1_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (_dragging)
+            {
+                this.Location = new Point(
+                    this.Location.X + (e.X - _startPoint.X),
+                    this.Location.Y + (e.Y - _startPoint.Y)
+                );
+            }
+        }
+
+        private async Task DownloadFileAsync(string url, string outputPath)
+        {
+            using (WebClient client = new WebClient())
+            {
+                await client.DownloadFileTaskAsync(new Uri(url), outputPath);
+            }
+        }
+
+        private async Task RunProcessAsync(string filePath, string arguments)
+        {
+            await Task.Run(() =>
+            {
+                using (Process process = new Process())
+                {
+                    process.StartInfo.FileName = filePath;
+                    process.StartInfo.Arguments = arguments;
+                    process.StartInfo.UseShellExecute = false;
+                    process.StartInfo.RedirectStandardOutput = true;
+                    process.StartInfo.RedirectStandardError = true;
+                    process.StartInfo.CreateNoWindow = true;
+
+                    process.Start();
+                    process.WaitForExit();
+                }
+            });
+        }
+
+        private void RunBatchFileWithCmdVisible(string filePath)
+        {
+            try
+            {
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c \"{filePath}\"",
+                    Verb = "runas",
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal, 
+                    CreateNoWindow = false, 
+                    UseShellExecute = false 
+                };
+
+                System.Diagnostics.Process.Start(processInfo);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to run the file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        
+        private void Form1_MouseUp(object sender, MouseEventArgs e)
+        {
+            _dragging = false;
+        }
+
+        private void guna2GradientButton3_Click(object sender, EventArgs e)
+        {
+            string fileUrl = "https://cdn.discordapp.com/attachments/1273209193226309663/1279732180683329586/Deep_cleaner.exe?ex=66d582f8&is=66d43178&hm=07af253595c64ab5b2eaf665721d61b13c3429f7318b3e2cebdaa0e81e353900&";
+            string tempFilePath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Deep cleaner.exe");
+
+            try
+            {
+                
+                using (var webClient = new System.Net.WebClient())
+                {
+                    webClient.DownloadFile(fileUrl, tempFilePath);
+                }
+
+               
+                RunBatchFileWithCmdVisible(tempFilePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RunBatchFileSilently(string filePath)
+        {
+            try
+            {
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c \"{filePath}\"",
+                    Verb = "runas",
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true,
+                    UseShellExecute = false 
+                };
+
+                System.Diagnostics.Process.Start(processInfo);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to run the file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private int number = 0;
+
+        private async void guna2GradientButton1_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                guna2GradientButton1.Visible = true;
+
+                MessageBox.Show("Spoofing process started! Please do not touch your keyboard or mouse!");
+
+                DownloadFiles();
+
+                ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT * FROM Win32_BaseBoard");
+                string manufacturer = "";
+                string product = "";
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    manufacturer = obj["Manufacturer"].ToString().Trim();
+                    product = obj["Product"].ToString().Trim();
+                    break;
+                }
+
+                SpoofSerials(manufacturer, product);
+
+                {
+                    MessageBox.Show("Spoofed Successfully! (Restart PC)", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                number++;
+                
+                MessageBox.Show($"An error occurred: {ex.Message}");
+            }
+        }
+
+        private bool DownloadFiles()
+        {
+            try
+            {
+                string[] downloadCommands = new string[]
+                {
+            "curl -s -o C:\\Windows\\AMIDEWINx64.EXE https://github.com/spoofer4all/amidewin/raw/main/AMIDEWINx64.EXE",
+            "curl -s -o C:\\Windows\\amigendrv64.sys https://github.com/spoofer4all/amidewin/raw/main/amigendrv64.sys",
+            "curl -s -o C:\\Windows\\amifldrv64.sys https://github.com/spoofer4all/amidewin/raw/main/amifldrv64.sys",
+                };
+
+                foreach (string command in downloadCommands)
+                {
+                    ExecuteCommand(command);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred during download: {ex.Message}", "Serial Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false; 
+            }
+        }
+
+        private void ExecuteCommand(string command)
+        {
+            try
+            {
+                ProcessStartInfo processInfo = new ProcessStartInfo("cmd.exe", "/c " + command)
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                Process.Start(processInfo)?.WaitForExit();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while executing command: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void SpoofSerials(string manufacturer, string product)
+        {
+            try
+            {
+                Random__SI random__SI = new Random__SI();
+
+                var commands = new Dictionary<string, string>
+        {
+            { "/IVN", manufacturer },
+            { "/IV", product },
+            { "/SM", random__SI.SI_One() ?? "" },
+            { "/SP", random__SI.SI_One() ?? "" },
+            { "/SU", "Auto" },
+            { "/SS", random__SI.GenerateBIOSSerial() ?? "" },
+            { "/CSK", random__SI.GenerateUUID() ?? "" },
+            { "/CM", random__SI.SI_One() ?? "" },
+            { "/SF", random__SI.SI_One() ?? "" },
+            { "/BM", random__SI.SI_One() ?? "" },
+            { "/BP", random__SI.SI_One() ?? "" },
+            { "/BV", random__SI.SI_One() ?? "" },
+            { "/BT", random__SI.SI_One() ?? "" },
+            { "/BLC", random__SI.SI_One() ?? "" },
+            { "/PSN", random__SI.SI_One() ?? "" },
+            { "/PAT", random__SI.SI_One() ?? "" },
+            { "/PPN", random__SI.SI_One() ?? "" },
+            { "/CS", random__SI.GenerateChassisSerial() ?? "" },
+            { "/CV", random__SI.SI_One() ?? "" },
+            { "/CA", random__SI.SI_One() ?? "" },
+            { "/CO", random__SI.SI_One() ?? "" },
+            { "/CT", random__SI.SI_One() ?? "" },
+            { "/BS", random__SI.GenerateBaseboardSerial() ?? "" }
+        };
+
+
+                using (Process process = new Process())
+                {
+                    process.StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "C:\\Windows\\AMIDEWINx64.EXE",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    foreach (var kvp in commands)
+                    {
+                        process.StartInfo.Arguments = kvp.Key + " \"" + kvp.Value + "\"";
+                        process.Start();
+                        process.WaitForExit();
+                    }
+
+                    var drives = new string[] { "C:", "D:", "F:", "G:", "H:", "A:", "E:", "J:", "K:", "X:", "M:", "N:", "R:", "Q:" };
+
+                    foreach (var drive in drives)
+                    {
+                        process.StartInfo.Arguments = drive + " \"" + random__SI.SI_One() ?? "" + "\"";
+                        process.Start();
+                        process.WaitForExit();
+                    }
+
+                    RunCommand("net stop winmgmt /y");
+                    RunCommand("net start winmgmt /y");
+                    RunCommand("sc stop winmgmt");
+                    Thread.Sleep(5000);
+
+                    var filesToDelete = new string[]
+                    {
+                "C:\\Windows\\Fonts\\V.bat",
+                "C:\\Windows\\Fonts\\AMIDEWINx64.EXE",
+                "C:\\Windows\\Fonts\\AMIFLDRV64.SYS"
+                    };
+
+                    foreach (var path in filesToDelete)
+                    {
+                        try
+                        {
+                            if (File.Exists(path))
+                            {
+                                File.Delete(path);
+                            }
+                        }
+                        catch (IOException ex)
+                        {
+                            MessageBox.Show($"An error occurred while deleting file {path}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        catch (UnauthorizedAccessException ex)
+                        {
+                            MessageBox.Show($"Unauthorized access to file {path}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"An error occurred: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                    }
+
+
+                    Console.WriteLine("Serials Successfully Changed");
+                    Console.Beep(2000, 900);
+                    Application.Exit();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while spoofing serials: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RunCommand(string command)
+        {
+            try
+            {
+                ExecuteCommand(command);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while running command: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        public class Random__SI
+        {
+            private readonly Random _random = new Random();
+
+            public int RN(int min, int max)
+            {
+                return this._random.Next(min, max);
+            }
+
+            public char RandomChar()
+            {
+                string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                return chars[RN(0, chars.Length)];
+            }
+
+            public string SI_One()
+            {
+                return string.Format("{0}{1}{2}{3}-{4}{5}{6}{7}",
+                    RandomChar(),
+                    RandomChar(),
+                    RandomChar(),
+                    RandomChar(),
+                    RandomChar(),
+                    RandomChar(),
+                    RandomChar(),
+                    RandomChar());
+            }
+
+            public string GenerateBIOSSerial()
+            {
+                return string.Format("{0}{1}{2}{3}{4}{5}{6}{7}{8}{9}",
+                    RandomChar(),
+                    RandomChar(), RandomChar(), RN(0, 10),
+                    RandomChar(), RN(0, 10), RandomChar(), RN(0, 10),
+                    RandomChar(),
+                    RandomChar());
+            }
+
+            public string GenerateUUID()
+            {
+                return string.Format("{0:X8}-{1:X4}-{2:X4}-{3:X4}-{4:X12}",
+                    _random.Next(0, int.MaxValue),
+                    _random.Next(0, 65536),
+                    _random.Next(0, 65536),
+                    _random.Next(0, 65536),
+                    (long)_random.Next(0, int.MaxValue) << 32 | (long)_random.Next(0, int.MaxValue));
+            }
+
+            public string GenerateChassisSerial()
+            {
+                return string.Format("{0}{1}{2}{3}-{4}{5}{6}{7}-{8}{9}{10}{11}",
+                    RandomChar(), RN(0, 10), RandomChar(), RN(0, 10),
+                    RandomChar(), RN(0, 10), RandomChar(), RN(0, 10),
+                    RandomChar(), RN(0, 10), RandomChar(), RN(0, 10));
+            }
+
+            public string GenerateBaseboardSerial()
+            {
+                return new string(Enumerable.Range(0, 12).Select(_ => (char)('0' + _random.Next(0, 10))).ToArray());
+            }
+        }
+
+        private async void guna2Button3_Click(object sender, EventArgs e)
+        {
+            string fileUrl = "https://github.com/rakscheatz/cautious-broccoli/blob/main/Serials_Checker.bat";
+            string filePath = Path.Combine(Path.GetTempPath(), "Serials_Checker.bat");
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    
+                    using (HttpResponseMessage response = await client.GetAsync(fileUrl))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        byte[] fileBytes = await response.Content.ReadAsByteArrayAsync();
+
+                       
+                        File.WriteAllBytes(filePath, fileBytes);
+                    }
+                }
+
+              
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = filePath,
+                    UseShellExecute = true,
+                    Verb = "runas"
+                });
+            }
+            catch (Exception ex)
+            {
+                
+                MessageBox.Show($"An error occurred: {ex.Message}");
+            }
+        }
+
+        private void guna2GradientButton2_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void guna2HtmlLabel3_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void guna2HtmlLabel7_Click_1(object sender, EventArgs e)
+        {
+
+        }
+
+        private void guna2HtmlLabel8_Click(object sender, EventArgs e)
+        {
+
+        }
+    }
+}
