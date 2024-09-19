@@ -13,6 +13,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+// u can skid this if u want 2 idc
+
 namespace Spoofer_Source
 {
     public partial class Form1 : Form
